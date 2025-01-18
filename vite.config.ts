@@ -25,6 +25,7 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, "popup.html"),
         options: resolve(__dirname, "options.html"),
+        linkedin_script: resolve(__dirname, "src/chrome-extension/scripts/linkedin_script.ts"),
       },
       output: {
         entryFileNames: "[name].js",
