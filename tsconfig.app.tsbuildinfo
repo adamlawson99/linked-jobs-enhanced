@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/optionsLocal.tsx","./src/vite-env.d.ts","./src/chrome-extension/options/index.tsx","./src/chrome-extension/popup/index.tsx","./src/chrome-extension/popup/test.tsx","./src/chrome-extension/utils/compensation/levelsFyiDataProvider.ts"],"version":"5.6.2"}
