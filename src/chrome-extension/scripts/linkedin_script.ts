@@ -58,16 +58,19 @@ const LEVELS_FYI_COUNTRY_MAPPINGS: {
     countryHumanFriendlyName: "United States",
   },
 };
-let COMPENSATION_DATA_CACHE: CompensationDataCache = {};
 const COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY = "COMPENSATION_DATA_CACHE";
-
+const CURRENCY_CONVERSION_XML_TAG = "value";
+const USD_CAD_EXCHANGE_RATE_URL =
+  "https://www.bankofcanada.ca/valet/fx_rss/FXUSDCAD";
 // <---- Constants ---->
 
 // <---- Global Vars ---->
+let compensationDataCache: CompensationDataCache = {};
 let activeItemElement: HTMLElement;
 let activeCompany: string;
 let activeCountry: LevelsCountryConfiguration =
   LEVELS_FYI_COUNTRY_MAPPINGS["usa"];
+let usdToCadExchangeRate: number;
 // <---- Global Vars ---->
 
 const waitForInitialPageLoad = () => {
@@ -145,26 +148,27 @@ export const getCompensationDataForCompany = async (
 const getCompensationAndLevelData = async (
   company: Company
 ): Promise<CompensationAndLevel[]> => {
-  const cachedCompensationData = await getElementFromCache(
+  let compensationData = await getElementFromCache(
     company.companySlug,
     activeCountry.countryShortName
   );
-  if (cachedCompensationData) {
-    console.log("CACHE HIT!");
-    return cachedCompensationData;
+  if (!compensationData) {
+    const compensationDataUrls: string[] = getCompensationDataUrls(company);
+    const compensationPromises = compensationDataUrls.map((url) =>
+      getCompensationDataFromUrl(url)
+    );
+    const result = await Promise.all(compensationPromises);
+    compensationData = result.filter((result) => result !== undefined);
   }
-  console.log("CACHE MISS!");
-  const compensationDataUrls: string[] = getCompensationDataUrls(company);
-  const compensationPromises = compensationDataUrls.map((url) =>
-    getCompensationDataFromUrl(url)
-  );
-  const result = await Promise.all(compensationPromises);
-  const compensationData = result.filter((result) => result !== undefined);
   setElementInCache(
     company.companySlug,
     activeCountry.countryShortName,
     compensationData
   );
+  if (activeCountry.countryShortName === "canada") {
+    console.log("CONVERTING COMPENSATION DATA");
+    return convertCompensationDataToCad(compensationData);
+  }
   return compensationData;
 };
 
@@ -222,7 +226,10 @@ export const getCompanyInformationFromLevels = async (
     );
   }
   const responseText = await response.text();
-  const responseData = extractResponseData(responseText);
+  const responseData = extractResponseDataFromHTML(
+    responseText,
+    LEVELS_DATA_SCRIPT_HTML_TAG
+  );
   if (!responseData.success) {
     throw new Error(`Error parsing response: ${responseData.error}`);
   }
@@ -234,12 +241,58 @@ export const getCompanyInformationFromLevels = async (
   };
 };
 
-const extractResponseData = (htmlString: string): HTMLParserResult => {
+const extractResponseDataFromHTML = (
+  rawHtml: string,
+  targetTag: string
+): HTMLParserResult => {
   try {
     const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlString, "text/html");
+    const doc = parser.parseFromString(rawHtml, "text/html");
 
-    const scriptTag = doc.querySelector(LEVELS_DATA_SCRIPT_HTML_TAG);
+    const scriptTag = doc.querySelector(targetTag);
+
+    if (!scriptTag) {
+      return {
+        success: false,
+        content: null,
+        error: "Data script tag not found in HTML",
+      };
+    }
+
+    const content = scriptTag.textContent;
+
+    if (!content) {
+      return {
+        success: false,
+        content: null,
+        error: "Data script tag was empty",
+      };
+    }
+
+    return {
+      success: true,
+      content: content,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      content: null,
+      error: `Failed to parse HTML: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`,
+    };
+  }
+};
+
+const extractResponseDataFromXML = (
+  rawHtml: string,
+  targetTag: string
+): HTMLParserResult => {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawHtml, "text/xml");
+
+    const scriptTag = doc.querySelector(targetTag);
 
     if (!scriptTag) {
       return {
@@ -439,17 +492,18 @@ const dragElement = (element: HTMLElement) => {
 
 // <----- Cache Helper ----->
 const getElementFromCache = async (company: string, country: string) => {
-  if (Object.keys(COMPENSATION_DATA_CACHE).length === 0) {
+  if (Object.keys(compensationDataCache).length === 0) {
     const localStorageGetResult = await chrome.storage.local.get(
       COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY
     );
 
     if (localStorageGetResult[COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY]) {
-      COMPENSATION_DATA_CACHE =
+      compensationDataCache =
         localStorageGetResult[COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY];
     }
   }
-  return COMPENSATION_DATA_CACHE[company]?.[country] ?? null;
+  getExchangeRate();
+  return compensationDataCache[company]?.[country] ?? null;
 };
 
 const setElementInCache = (
@@ -457,12 +511,58 @@ const setElementInCache = (
   country: string,
   compensationData: CompensationAndLevel[]
 ) => {
-  if (!COMPENSATION_DATA_CACHE[company]) {
-    COMPENSATION_DATA_CACHE[company] = {};
+  if (!compensationDataCache[company]) {
+    compensationDataCache[company] = {};
   }
-  COMPENSATION_DATA_CACHE[company][country] = compensationData;
+  compensationDataCache[company][country] = compensationData;
   chrome.storage.local.set({
-    [COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY]: COMPENSATION_DATA_CACHE,
+    [COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY]: compensationDataCache,
   });
 };
 // <----- Cache Helper ----->
+
+// <----- Currency Conversion Helper ----->
+
+const getExchangeRate = async (): Promise<number> => {
+  const response = await fetch(USD_CAD_EXCHANGE_RATE_URL);
+  if (!response.ok) {
+    throw new Error(
+      `Error fetching company data from Levels. Response status: ${response.status}`
+    );
+  }
+  const responseText = await response.text();
+
+  const responseData = extractResponseDataFromXML(
+    responseText,
+    CURRENCY_CONVERSION_XML_TAG
+  );
+  if (!responseData.success) {
+    throw new Error(`Error parsing response: ${responseData.error}`);
+  }
+  return parseFloat(responseData.content!);
+};
+
+interface HTMLParserResult {
+  success: boolean;
+  content: string | null;
+  error?: string;
+}
+
+const convertCompensationDataToCad = async (
+  compensationData: CompensationAndLevel[]
+): Promise<CompensationAndLevel[]> => {
+  if (!usdToCadExchangeRate) {
+    usdToCadExchangeRate = await getExchangeRate();
+  }
+  console.log("CURRENT EXCHANGE RATE: " + usdToCadExchangeRate);
+  return compensationData.map((compensationData) => {
+    return {
+      ...compensationData,
+      avgTotalCompensation: Math.trunc(
+        compensationData.avgTotalCompensation * usdToCadExchangeRate
+      ),
+    };
+  });
+};
+
+// <----- Currency Conversion Helper ----->
