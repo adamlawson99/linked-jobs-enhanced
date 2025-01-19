@@ -1,0 +1,10 @@
+.levels-fyi-data-container {
+  position: absolute;
+  left: 0; /* Position on the left side */
+  top: 50%; /* Center vertically */
+  transform: translateY(-50%); /* Adjust to exactly center vertically */
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  padding: 20px;
+  z-index: 1000; /* Ensures it's on top */
+}

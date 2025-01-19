@@ -1,5 +1,4 @@
 // CONSTANTS
-// const LEVELS_FYI_URL_BASE = "https://www.levels.fyi"
 const LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_PREFIX =
   "https://www.levels.fyi/companies";
 const LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_SUFFIX =
