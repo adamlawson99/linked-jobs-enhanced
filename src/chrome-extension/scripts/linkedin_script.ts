@@ -1,3 +1,40 @@
+const CONFIG = {
+  SELECTORS: {
+    ACTIVE_ITEM: ".job-details-jobs-unified-top-card__company-name",
+    PARENT_CONTAINER: ".scaffold-layout--list-detail",
+    DATA_CONTAINER: ".linkedin-enhanced-data-container",
+    DATA_LIST: ".linkedin-enhanced-data-list",
+  },
+  URLS: {
+    LEVELS_FYI: {
+      BASE: "https://www.levels.fyi/companies",
+      SALARY_SUFFIX: "salaries/software-engineer",
+      DATA_SCRIPT_TAG: "script#__NEXT_DATA__",
+    },
+    EXCHANGE_RATE: "https://www.bankofcanada.ca/valet/fx_rss/FXUSDCAD",
+  },
+  STORAGE_KEYS: {
+    COMPENSATION_CACHE: "COMPENSATION_DATA_CACHE",
+  },
+  XML_TAGS: {
+    CURRENCY_VALUE: "value",
+  },
+  LOCALE: {
+    LEVELS_FYI_COUNTRY_MAPPINGS: {
+      canada: {
+        countryCode: 43,
+        countryShortName: "canada",
+        countryHumanFriendlyName: "Canada",
+      },
+      usa: {
+        countryCode: 254,
+        countryShortName: "usa",
+        countryHumanFriendlyName: "United States",
+      },
+    },
+  },
+};
+
 // <---- Interfaces ---->
 interface CompensationAndLevel {
   avgTotalCompensation: number;
@@ -36,59 +73,31 @@ interface CompensationDataCache {
 
 // <---- Interfaces ---->
 
-// <---- Constants ---->
-const ACTIVE_ITEM_CLASS = ".job-details-jobs-unified-top-card__company-name";
-const LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_PREFIX =
-  "https://www.levels.fyi/companies";
-const LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_SUFFIX =
-  "salaries/software-engineer";
-// const LEVELS_FYI_DATA_URL_BASE = `${LEVELS_FYI_URL_BASE}/_next/data`
-const LEVELS_DATA_SCRIPT_HTML_TAG = "script#__NEXT_DATA__";
-const LEVELS_FYI_COUNTRY_MAPPINGS: {
-  [key: string]: LevelsCountryConfiguration;
-} = {
-  canada: {
-    countryCode: 43,
-    countryShortName: "canada",
-    countryHumanFriendlyName: "Canada",
-  },
-  usa: {
-    countryCode: 254,
-    countryShortName: "usa",
-    countryHumanFriendlyName: "United States",
-  },
-};
-const COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY = "COMPENSATION_DATA_CACHE";
-const CURRENCY_CONVERSION_XML_TAG = "value";
-const USD_CAD_EXCHANGE_RATE_URL =
-  "https://www.bankofcanada.ca/valet/fx_rss/FXUSDCAD";
-// <---- Constants ---->
-
 // <---- Global Vars ---->
 let compensationDataCache: CompensationDataCache = {};
 let activeItemElement: HTMLElement;
 let activeCompany: string;
 let activeCountry: LevelsCountryConfiguration =
-  LEVELS_FYI_COUNTRY_MAPPINGS["usa"];
+  CONFIG.LOCALE.LEVELS_FYI_COUNTRY_MAPPINGS["usa"];
 let usdToCadExchangeRate: number;
 // <---- Global Vars ---->
 
 const waitForInitialPageLoad = () => {
   return new Promise((resolve) => {
-    if (document.querySelector(ACTIVE_ITEM_CLASS)) {
+    if (document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM)) {
       activeItemElement = document.querySelector(
-        ACTIVE_ITEM_CLASS
+        CONFIG.SELECTORS.ACTIVE_ITEM
       ) as HTMLElement;
-      return resolve(document.querySelector(ACTIVE_ITEM_CLASS));
+      return resolve(document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM));
     }
 
     const observer = new MutationObserver((_) => {
-      if (document.querySelector(ACTIVE_ITEM_CLASS)) {
+      if (document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM)) {
         activeItemElement = document.querySelector(
-          ACTIVE_ITEM_CLASS
+          CONFIG.SELECTORS.ACTIVE_ITEM
         ) as HTMLElement;
         observer.disconnect();
-        resolve(document.querySelector(ACTIVE_ITEM_CLASS));
+        resolve(document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM));
       }
     });
 
@@ -100,9 +109,9 @@ const waitForInitialPageLoad = () => {
 };
 
 const documentObserver = new MutationObserver((_) => {
-  if (document.querySelector(ACTIVE_ITEM_CLASS)) {
+  if (document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM)) {
     activeItemElement = document.querySelector(
-      ACTIVE_ITEM_CLASS
+      CONFIG.SELECTORS.ACTIVE_ITEM
     ) as HTMLElement;
     registerAfterInitialPageLoad();
   }
@@ -166,7 +175,6 @@ const getCompensationAndLevelData = async (
     compensationData
   );
   if (activeCountry.countryShortName === "canada") {
-    console.log("CONVERTING COMPENSATION DATA");
     return convertCompensationDataToCad(compensationData);
   }
   return compensationData;
@@ -182,16 +190,16 @@ const getCompensationDataFromUrl = async (
     );
   }
   const responseText = await response.text();
-  const responseJson = JSON.parse(responseText);
+  const responseJson = JSON.parse(responseText)["pageProps"];
   let compensationAndLevelData;
   try {
     compensationAndLevelData = {
       avgTotalCompensation:
-        responseJson["pageProps"]["companyJobFamilyLevelLocationStats"][
-          "totalCompensation"
-        ]["avg"],
-      levelSlug: responseJson["pageProps"]["levelSlug"],
-      levelNameHumanFriendly: responseJson["pageProps"]["level"],
+        responseJson["companyJobFamilyLevelLocationStats"]["totalCompensation"][
+          "avg"
+        ],
+      levelSlug: responseJson["levelSlug"],
+      levelNameHumanFriendly: responseJson["level"],
     };
   } catch (err) {}
   return compensationAndLevelData;
@@ -199,26 +207,18 @@ const getCompensationDataFromUrl = async (
 
 const getCompensationDataUrls = (company: Company): string[] => {
   return company.levels.map((level) => {
-    let compensationDataUrl = `https://www.levels.fyi/_next/data/${company.buildId}/companies/${company.companySlug}/salaries/software-engineer/levels/${level.levelSlug}`;
-    if (activeCountry.countryShortName !== "usa") {
-      compensationDataUrl = `${compensationDataUrl}/locations/${activeCountry.countryShortName}`;
+    if (activeCountry.countryShortName === "usa") {
+      return `https://www.levels.fyi/_next/data/${company.buildId}/companies/${company.companySlug}/salaries/software-engineer/levels/${level.levelSlug}.json?company=${company.companySlug}&job-family=software-engineer&level=${level.levelSlug}`;
+    } else {
+      return `https://www.levels.fyi/_next/data/${company.buildId}/companies/${company.companySlug}/salaries/software-engineer/levels/${level.levelSlug}/locations/${activeCountry.countryShortName}.json?company=${company.companySlug}&job-family=software-engineer&level=${level.levelSlug}&location=${activeCountry.countryShortName}`;
     }
-    compensationDataUrl = `${compensationDataUrl}.json?company=${company.companySlug}&job-family=software-engineer&level=${level.levelSlug}`;
-    if (activeCountry.countryShortName !== "usa") {
-      compensationDataUrl = `${compensationDataUrl}&location=${activeCountry.countryShortName}`;
-    }
-    return compensationDataUrl;
   });
 };
 
 export const getCompanyInformationFromLevels = async (
   company: string
 ): Promise<Company> => {
-  let companyPageUrl = `${LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_PREFIX}/${company}/${LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_SUFFIX}`;
-  if (activeCountry.countryShortName !== "usa") {
-    companyPageUrl = `${companyPageUrl}/locations/${activeCountry.countryShortName}`;
-  }
-  companyPageUrl = `${companyPageUrl}?country=${activeCountry.countryCode}`;
+  const companyPageUrl = buildLevelsCompanyPageUrl(company);
   const response = await fetchResource(companyPageUrl);
   if (!response.ok) {
     throw new Error(
@@ -228,7 +228,7 @@ export const getCompanyInformationFromLevels = async (
   const responseText = await response.text();
   const responseData = extractResponseDataFromHTML(
     responseText,
-    LEVELS_DATA_SCRIPT_HTML_TAG
+    CONFIG.URLS.LEVELS_FYI.DATA_SCRIPT_TAG
   );
   if (!responseData.success) {
     throw new Error(`Error parsing response: ${responseData.error}`);
@@ -241,74 +241,54 @@ export const getCompanyInformationFromLevels = async (
   };
 };
 
+const buildLevelsCompanyPageUrl = (company: string) => {
+  if (activeCountry.countryShortName === "usa") {
+    return `${CONFIG.URLS.LEVELS_FYI.BASE}/${company}/${CONFIG.URLS.LEVELS_FYI.SALARY_SUFFIX}?country=${activeCountry.countryCode}`;
+  } else {
+    return `${CONFIG.URLS.LEVELS_FYI.BASE}/${company}/${CONFIG.URLS.LEVELS_FYI.SALARY_SUFFIX}/locations/${activeCountry.countryShortName}?country=${activeCountry.countryCode}`;
+  }
+};
+
 const extractResponseDataFromHTML = (
   rawHtml: string,
   targetTag: string
 ): HTMLParserResult => {
-  try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(rawHtml, "text/html");
-
-    const scriptTag = doc.querySelector(targetTag);
-
-    if (!scriptTag) {
-      return {
-        success: false,
-        content: null,
-        error: "Data script tag not found in HTML",
-      };
-    }
-
-    const content = scriptTag.textContent;
-
-    if (!content) {
-      return {
-        success: false,
-        content: null,
-        error: "Data script tag was empty",
-      };
-    }
-
-    return {
-      success: true,
-      content: content,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      content: null,
-      error: `Failed to parse HTML: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`,
-    };
-  }
+  return extractResponseData(rawHtml, targetTag, "text/html");
 };
 
 const extractResponseDataFromXML = (
-  rawHtml: string,
+  rawXml: string,
   targetTag: string
 ): HTMLParserResult => {
+  return extractResponseData(rawXml, targetTag, "text/xml");
+};
+
+const extractResponseData = (
+  rawText: string,
+  targetTag: string,
+  type: DOMParserSupportedType
+) => {
   try {
     const parser = new DOMParser();
-    const doc = parser.parseFromString(rawHtml, "text/xml");
+    const doc = parser.parseFromString(rawText, type);
 
-    const scriptTag = doc.querySelector(targetTag);
+    const queryResult = doc.querySelector(targetTag);
 
-    if (!scriptTag) {
+    if (!queryResult) {
       return {
         success: false,
         content: null,
-        error: "Data script tag not found in HTML",
+        error: "queryResult not found",
       };
     }
 
-    const content = scriptTag.textContent;
+    const content = queryResult.textContent;
 
     if (!content) {
       return {
         success: false,
         content: null,
-        error: "Data script tag was empty",
+        error: "queryResult was empty",
       };
     }
 
@@ -320,7 +300,7 @@ const extractResponseDataFromXML = (
     return {
       success: false,
       content: null,
-      error: `Failed to parse HTML: ${
+      error: `Failed to parse: ${
         error instanceof Error ? error.message : "Unknown error"
       }`,
     };
@@ -376,13 +356,20 @@ const loadLinkedInEnhancedWidget = () => {
     ".linkedin-enhanced-data-container"
   ) as HTMLElement;
   if (!linkedInEnhancedDataContainer) {
-    linkedInEnhancedDataContainer = document.createElement("div");
-    const linkedInEnhancedTitle = document.createElement("h1");
+    linkedInEnhancedDataContainer = createHtmlElementWithClass(
+      "div",
+      "linkedin-enhanced-data-container"
+    );
+
+    const linkedInEnhancedTitle = createHtmlElementWithClass(
+      "h1",
+      "linkedin-enhanced-title"
+    );
+
     linkedInEnhancedTitle.innerText = "LinkedIn Jobs Enhanced";
-    linkedInEnhancedTitle.className = "linkedin-enhanced-title";
+
     linkedInEnhancedDataContainer.append(linkedInEnhancedTitle);
-    linkedInEnhancedDataContainer.className =
-      "linkedin-enhanced-data-container";
+
     parentElementTarget.append(linkedInEnhancedDataContainer);
 
     // Make the element draggable
@@ -411,12 +398,16 @@ const refreshInformation = async () => {
     linkedInEnhancedDataContainer.removeChild(linkedInEnhancedDataList);
   }
 
-  linkedInEnhancedDataList = document.createElement("ul");
-  linkedInEnhancedDataList.className = "linkedin-enhanced-data-list";
+  linkedInEnhancedDataList = createHtmlElementWithClass(
+    "ul",
+    "linkedin-enhanced-data-list"
+  );
 
   compensationData.forEach((item: any) => {
-    const li = document.createElement("li");
-    li.className = "linkedin-enhanced-data-list-item";
+    const li = createHtmlElementWithClass(
+      "li",
+      "linkedin-enhanced-data-list-item"
+    );
     li.textContent = `Level: ${item.levelNameHumanFriendly}, Comp: ${item.avgTotalCompensation}`;
     linkedInEnhancedDataList.appendChild(li);
   });
@@ -443,12 +434,90 @@ const getCountrySelectDropdown = (): HTMLSelectElement => {
 const onCountrySelectChange = (event: Event) => {
   const selectElement = event.target as HTMLSelectElement;
   const selectedCountryValue = selectElement.value;
-  const newCountry = LEVELS_FYI_COUNTRY_MAPPINGS[selectedCountryValue];
+  const newCountry =
+    //@ts-ignore
+    CONFIG.LOCALE.LEVELS_FYI_COUNTRY_MAPPINGS[selectedCountryValue];
   activeCountry = newCountry;
   refreshInformation();
 };
 
 // <----- Dropdown List OnChange ----->
+
+// <----- Cache Helper ----->
+const getElementFromCache = async (company: string, country: string) => {
+  if (Object.keys(compensationDataCache).length === 0) {
+    const localStorageGetResult = await chrome.storage.local.get(
+      CONFIG.STORAGE_KEYS.COMPENSATION_CACHE
+    );
+
+    if (localStorageGetResult[CONFIG.STORAGE_KEYS.COMPENSATION_CACHE]) {
+      compensationDataCache =
+        localStorageGetResult[CONFIG.STORAGE_KEYS.COMPENSATION_CACHE];
+    }
+  }
+  getExchangeRate();
+  return compensationDataCache[company]?.[country] ?? null;
+};
+
+const setElementInCache = (
+  company: string,
+  country: string,
+  compensationData: CompensationAndLevel[]
+) => {
+  if (!compensationDataCache[company]) {
+    compensationDataCache[company] = {};
+  }
+  compensationDataCache[company][country] = compensationData;
+  chrome.storage.local.set({
+    [CONFIG.STORAGE_KEYS.COMPENSATION_CACHE]: compensationDataCache,
+  });
+};
+// <----- Cache Helper ----->
+
+// <----- Currency Conversion Helper ----->
+
+const getExchangeRate = async (): Promise<number> => {
+  const response = await fetch(CONFIG.URLS.EXCHANGE_RATE);
+  if (!response.ok) {
+    throw new Error(
+      `Error fetching company data from Levels. Response status: ${response.status}`
+    );
+  }
+  const responseText = await response.text();
+
+  const responseData = extractResponseDataFromXML(
+    responseText,
+    CONFIG.XML_TAGS.CURRENCY_VALUE
+  );
+  if (!responseData.success) {
+    throw new Error(`Error parsing response: ${responseData.error}`);
+  }
+  return parseFloat(responseData.content!);
+};
+
+interface HTMLParserResult {
+  success: boolean;
+  content: string | null;
+  error?: string;
+}
+
+const convertCompensationDataToCad = async (
+  compensationData: CompensationAndLevel[]
+): Promise<CompensationAndLevel[]> => {
+  if (!usdToCadExchangeRate) {
+    usdToCadExchangeRate = await getExchangeRate();
+  }
+  return compensationData.map((compensationData) => {
+    return {
+      ...compensationData,
+      avgTotalCompensation: Math.trunc(
+        compensationData.avgTotalCompensation * usdToCadExchangeRate
+      ),
+    };
+  });
+};
+
+// <----- Currency Conversion Helper ----->
 
 // <----- Draggable Info Box ----->
 const dragElement = (element: HTMLElement) => {
@@ -490,79 +559,14 @@ const dragElement = (element: HTMLElement) => {
 };
 // <----- Draggable Info Box ----->
 
-// <----- Cache Helper ----->
-const getElementFromCache = async (company: string, country: string) => {
-  if (Object.keys(compensationDataCache).length === 0) {
-    const localStorageGetResult = await chrome.storage.local.get(
-      COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY
-    );
-
-    if (localStorageGetResult[COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY]) {
-      compensationDataCache =
-        localStorageGetResult[COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY];
-    }
-  }
-  getExchangeRate();
-  return compensationDataCache[company]?.[country] ?? null;
+// <----- Random Helpers ----->
+const createHtmlElementWithClass = (
+  elementType: string,
+  className: string
+): HTMLElement => {
+  const element = document.createElement(elementType);
+  element.className = className;
+  return element;
 };
 
-const setElementInCache = (
-  company: string,
-  country: string,
-  compensationData: CompensationAndLevel[]
-) => {
-  if (!compensationDataCache[company]) {
-    compensationDataCache[company] = {};
-  }
-  compensationDataCache[company][country] = compensationData;
-  chrome.storage.local.set({
-    [COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY]: compensationDataCache,
-  });
-};
-// <----- Cache Helper ----->
-
-// <----- Currency Conversion Helper ----->
-
-const getExchangeRate = async (): Promise<number> => {
-  const response = await fetch(USD_CAD_EXCHANGE_RATE_URL);
-  if (!response.ok) {
-    throw new Error(
-      `Error fetching company data from Levels. Response status: ${response.status}`
-    );
-  }
-  const responseText = await response.text();
-
-  const responseData = extractResponseDataFromXML(
-    responseText,
-    CURRENCY_CONVERSION_XML_TAG
-  );
-  if (!responseData.success) {
-    throw new Error(`Error parsing response: ${responseData.error}`);
-  }
-  return parseFloat(responseData.content!);
-};
-
-interface HTMLParserResult {
-  success: boolean;
-  content: string | null;
-  error?: string;
-}
-
-const convertCompensationDataToCad = async (
-  compensationData: CompensationAndLevel[]
-): Promise<CompensationAndLevel[]> => {
-  if (!usdToCadExchangeRate) {
-    usdToCadExchangeRate = await getExchangeRate();
-  }
-  console.log("CURRENT EXCHANGE RATE: " + usdToCadExchangeRate);
-  return compensationData.map((compensationData) => {
-    return {
-      ...compensationData,
-      avgTotalCompensation: Math.trunc(
-        compensationData.avgTotalCompensation * usdToCadExchangeRate
-      ),
-    };
-  });
-};
-
-// <----- Currency Conversion Helper ----->
+// <----- Random Helpers ----->
