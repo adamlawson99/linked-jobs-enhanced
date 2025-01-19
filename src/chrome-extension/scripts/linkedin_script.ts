@@ -28,6 +28,12 @@ interface LevelsCountryConfiguration {
   countryHumanFriendlyName: string;
 }
 
+interface CompensationDataCache {
+  [company: string]: {
+    [country: string]: CompensationAndLevel[];
+  };
+}
+
 // <---- Interfaces ---->
 
 // <---- Constants ---->
@@ -52,6 +58,7 @@ const LEVELS_FYI_COUNTRY_MAPPINGS: {
     countryHumanFriendlyName: "United States",
   },
 };
+const COMPENSATION_DATA_CACHE: CompensationDataCache = {};
 
 // <---- Constants ---->
 
@@ -105,7 +112,7 @@ documentObserver.observe(document.body, {
 waitForInitialPageLoad().then(() => {
   const aTag = activeItemElement.children[0] as HTMLElement;
   activeCompany = aTag.innerText.trim().toLowerCase();
-  registerAfterInitialPageLoad();
+  refreshInformation();
 });
 
 const registerAfterInitialPageLoad = () => {
@@ -116,9 +123,7 @@ const registerAfterInitialPageLoad = () => {
       return;
     }
     activeCompany = newActiveCompany;
-    getCompensationDataForCompany(activeCompany).then((data) => {
-      addItemToPage(data);
-    });
+    refreshInformation();
   });
 
   observer.observe(activeItemElement, {
@@ -139,12 +144,25 @@ export const getCompensationDataForCompany = async (
 const getCompensationAndLevelData = async (
   company: Company
 ): Promise<CompensationAndLevel[]> => {
+  const cachedCompensationData = getElementFromCache(
+    company.companySlug,
+    activeCountry.countryShortName
+  );
+  if (cachedCompensationData) {
+    return cachedCompensationData;
+  }
   const compensationDataUrls: string[] = getCompensationDataUrls(company);
   const compensationPromises = compensationDataUrls.map((url) =>
     getCompensationDataFromUrl(url)
   );
   const result = await Promise.all(compensationPromises);
-  return result.filter((result) => result !== undefined);
+  const compensationData = result.filter((result) => result !== undefined);
+  setElementInCache(
+    company.companySlug,
+    activeCountry.countryShortName,
+    compensationData
+  );
+  return compensationData;
 };
 
 const getCompensationDataFromUrl = async (
@@ -291,13 +309,7 @@ const fetchResource = (
   });
 };
 
-const refreshInformation = () => {
-  getCompensationDataForCompany(activeCompany).then((data) => {
-    addItemToPage(data);
-  });
-};
-
-const addItemToPage = (data: any) => {
+const loadLinkedInEnhancedWidget = () => {
   //Unload the current child if it exists
   const parentElementTarget = document.querySelector(
     ".scaffold-layout--list-detail"
@@ -309,6 +321,10 @@ const addItemToPage = (data: any) => {
   ) as HTMLElement;
   if (!linkedInEnhancedDataContainer) {
     linkedInEnhancedDataContainer = document.createElement("div");
+    const linkedInEnhancedTitle = document.createElement("h1");
+    linkedInEnhancedTitle.innerText = "LinkedIn Jobs Enhanced";
+    linkedInEnhancedTitle.className = "linkedin-enhanced-title";
+    linkedInEnhancedDataContainer.append(linkedInEnhancedTitle);
     linkedInEnhancedDataContainer.className =
       "linkedin-enhanced-data-container";
     parentElementTarget.append(linkedInEnhancedDataContainer);
@@ -319,7 +335,18 @@ const addItemToPage = (data: any) => {
     // Add the country select dropdown
     linkedInEnhancedDataContainer.appendChild(getCountrySelectDropdown());
   }
+  return linkedInEnhancedDataContainer;
+};
 
+const refreshInformation = async () => {
+  const compensationData = await getCompensationDataForCompany(activeCompany);
+  // Create the data container if it doesn't exists
+  let linkedInEnhancedDataContainer = document.querySelector(
+    ".linkedin-enhanced-data-container"
+  ) as HTMLElement;
+  if (!linkedInEnhancedDataContainer) {
+    linkedInEnhancedDataContainer = loadLinkedInEnhancedWidget();
+  }
   // Unload the current list if present
   let linkedInEnhancedDataList = document.querySelector(
     ".linkedin-enhanced-data-list"
@@ -331,7 +358,7 @@ const addItemToPage = (data: any) => {
   linkedInEnhancedDataList = document.createElement("ul");
   linkedInEnhancedDataList.className = "linkedin-enhanced-data-list";
 
-  data.forEach((item: any) => {
+  compensationData.forEach((item: any) => {
     const li = document.createElement("li");
     li.className = "linkedin-enhanced-data-list-item";
     li.textContent = `Level: ${item.levelNameHumanFriendly}, Comp: ${item.avgTotalCompensation}`;
@@ -406,3 +433,21 @@ const dragElement = (element: HTMLElement) => {
   }
 };
 // <----- Draggable Info Box ----->
+
+// <----- Cache Helper ----->
+const getElementFromCache = (company: string, country: string) => {
+  return COMPENSATION_DATA_CACHE[company]?.[country] ?? null;
+};
+
+const setElementInCache = (
+  company: string,
+  country: string,
+  compensationData: CompensationAndLevel[]
+) => {
+  if (!COMPENSATION_DATA_CACHE?.[company]) {
+    COMPENSATION_DATA_CACHE[company] = {};
+  }
+  COMPENSATION_DATA_CACHE[company][country] = compensationData;
+};
+
+// <----- Cache Helper ----->

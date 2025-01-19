@@ -1,6 +1,8 @@
 .linkedin-enhanced-data-container {
   position: absolute;
-  z-index: 9;
+  top: 100px;
+  left: 10vw;
+  z-index: 99;
   background-color: #f1f1f1;
   border: 1px solid #d3d3d3;
   text-align: center;
@@ -8,8 +10,13 @@
 
 .linkedin-enhanced-data-list {
   list-style-type: none;
-  padding-left: 0;
+  padding: 10px 25px 0 25px;
   margin: 0;
+}
+
+.linkedin-enhanced-title {
+  font-size: 1.75rem;
+  font-weight: bold;
 }
 
 .linkedin-enhanced-data-list-item {
