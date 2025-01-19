@@ -1,10 +1,21 @@
-.levels-fyi-data-container {
+.linkedin-enhanced-data-container {
   position: absolute;
-  left: 0; /* Position on the left side */
-  top: 50%; /* Center vertically */
-  transform: translateY(-50%); /* Adjust to exactly center vertically */
-  background-color: rgba(0, 0, 0, 0.5);
-  color: white;
-  padding: 20px;
-  z-index: 1000; /* Ensures it's on top */
+  z-index: 9;
+  background-color: #f1f1f1;
+  border: 1px solid #d3d3d3;
+  text-align: center;
+}
+
+.linkedin-enhanced-data-list {
+  list-style-type: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.linkedin-enhanced-data-list-item {
+  text-align: left;
+}
+
+.linkedin-enhanced-country-select {
+  z-index: 9;
 }

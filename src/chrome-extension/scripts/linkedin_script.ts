@@ -1,7 +1,66 @@
-const ACTIVE_ITEM_CLASS = ".job-details-jobs-unified-top-card__company-name";
+// <---- Interfaces ---->
+interface CompensationAndLevel {
+  avgTotalCompensation: number;
+  levelSlug: string;
+  levelNameHumanFriendly: string;
+}
 
+interface Company {
+  companySlug: string;
+  buildId: string;
+  levels: Level[];
+}
+
+interface Level {
+  levelSlug: string;
+  levelNameHumanFriendly: string;
+}
+
+interface HTMLParserResult {
+  success: boolean;
+  content: string | null;
+  error?: string;
+}
+
+interface LevelsCountryConfiguration {
+  countryCode: number;
+  countryShortName: string;
+  countryHumanFriendlyName: string;
+}
+
+// <---- Interfaces ---->
+
+// <---- Constants ---->
+const ACTIVE_ITEM_CLASS = ".job-details-jobs-unified-top-card__company-name";
+const LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_PREFIX =
+  "https://www.levels.fyi/companies";
+const LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_SUFFIX =
+  "salaries/software-engineer";
+// const LEVELS_FYI_DATA_URL_BASE = `${LEVELS_FYI_URL_BASE}/_next/data`
+const LEVELS_DATA_SCRIPT_HTML_TAG = "script#__NEXT_DATA__";
+const LEVELS_FYI_COUNTRY_MAPPINGS: {
+  [key: string]: LevelsCountryConfiguration;
+} = {
+  canada: {
+    countryCode: 43,
+    countryShortName: "canada",
+    countryHumanFriendlyName: "Canada",
+  },
+  usa: {
+    countryCode: 254,
+    countryShortName: "usa",
+    countryHumanFriendlyName: "United States",
+  },
+};
+
+// <---- Constants ---->
+
+// <---- Global Vars ---->
 let activeItemElement: HTMLElement;
 let activeCompany: string;
+let activeCountry: LevelsCountryConfiguration =
+  LEVELS_FYI_COUNTRY_MAPPINGS["usa"];
+// <---- Global Vars ---->
 
 const waitForInitialPageLoad = () => {
   return new Promise((resolve) => {
@@ -43,7 +102,6 @@ documentObserver.observe(document.body, {
   subtree: true,
 });
 
-
 waitForInitialPageLoad().then(() => {
   const aTag = activeItemElement.children[0] as HTMLElement;
   activeCompany = aTag.innerText.trim().toLowerCase();
@@ -70,37 +128,6 @@ const registerAfterInitialPageLoad = () => {
 };
 
 // <---- Levels FYI Helper ---->
-// CONSTANTS
-const LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_PREFIX =
-  "https://www.levels.fyi/companies";
-const LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_SUFFIX =
-  "salaries/software-engineer?country=254";
-// const LEVELS_FYI_DATA_URL_BASE = `${LEVELS_FYI_URL_BASE}/_next/data`
-const LEVELS_DATA_SCRIPT_HTML_TAG = "script#__NEXT_DATA__";
-
-// INTERFACES
-export interface CompensationAndLevel {
-  avgTotalCompensation: number;
-  levelSlug: string;
-  levelNameHumanFriendly: string;
-}
-
-export interface Company {
-  companySlug: string;
-  buildId: string;
-  levels: Level[];
-}
-
-interface Level {
-  levelSlug: string;
-  levelNameHumanFriendly: string;
-}
-
-interface HTMLParserResult {
-  success: boolean;
-  content: string | null;
-  error?: string;
-}
 
 export const getCompensationDataForCompany = async (
   company: string
@@ -147,14 +174,26 @@ const getCompensationDataFromUrl = async (
 
 const getCompensationDataUrls = (company: Company): string[] => {
   return company.levels.map((level) => {
-    return `https://www.levels.fyi/_next/data/${company.buildId}/companies/${company.companySlug}/salaries/software-engineer/levels/${level.levelSlug}.json?company=${company.companySlug}&job-family=software-engineer&level=${level.levelSlug}`;
+    let compensationDataUrl = `https://www.levels.fyi/_next/data/${company.buildId}/companies/${company.companySlug}/salaries/software-engineer/levels/${level.levelSlug}`;
+    if (activeCountry.countryShortName !== "usa") {
+      compensationDataUrl = `${compensationDataUrl}/locations/${activeCountry.countryShortName}`;
+    }
+    compensationDataUrl = `${compensationDataUrl}.json?company=${company.companySlug}&job-family=software-engineer&level=${level.levelSlug}`;
+    if (activeCountry.countryShortName !== "usa") {
+      compensationDataUrl = `${compensationDataUrl}&location=${activeCountry.countryShortName}`;
+    }
+    return compensationDataUrl;
   });
 };
 
 export const getCompanyInformationFromLevels = async (
   company: string
 ): Promise<Company> => {
-  const companyPageUrl = `${LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_PREFIX}/${company}/${LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_SUFFIX}`;
+  let companyPageUrl = `${LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_PREFIX}/${company}/${LEVELS_FYI_SOFTWARE_ENGINEER_SALARIES_URL_SUFFIX}`;
+  if (activeCountry.countryShortName !== "usa") {
+    companyPageUrl = `${companyPageUrl}/locations/${activeCountry.countryShortName}`;
+  }
+  companyPageUrl = `${companyPageUrl}?country=${activeCountry.countryCode}`;
   const response = await fetchResource(companyPageUrl);
   if (!response.ok) {
     throw new Error(
@@ -252,26 +291,118 @@ const fetchResource = (
   });
 };
 
+const refreshInformation = () => {
+  getCompensationDataForCompany(activeCompany).then((data) => {
+    addItemToPage(data);
+  });
+};
+
 const addItemToPage = (data: any) => {
   //Unload the current child if it exists
-  const elem = document.querySelector(
+  const parentElementTarget = document.querySelector(
     ".scaffold-layout--list-detail"
   ) as HTMLElement;
-  const currChild = document.querySelector(".levels-fyi-data-container");
-  if (currChild) {
-    elem.removeChild(currChild);
+
+  // Create the data container if it doesn't exists
+  let linkedInEnhancedDataContainer = document.querySelector(
+    ".linkedin-enhanced-data-container"
+  ) as HTMLElement;
+  if (!linkedInEnhancedDataContainer) {
+    linkedInEnhancedDataContainer = document.createElement("div");
+    linkedInEnhancedDataContainer.className =
+      "linkedin-enhanced-data-container";
+    parentElementTarget.append(linkedInEnhancedDataContainer);
+
+    // Make the element draggable
+    dragElement(linkedInEnhancedDataContainer);
+
+    // Add the country select dropdown
+    linkedInEnhancedDataContainer.appendChild(getCountrySelectDropdown());
   }
-  const newDiv = document.createElement("div");
-  // Create the <ul> element
-  const ul = document.createElement("ul");
+
+  // Unload the current list if present
+  let linkedInEnhancedDataList = document.querySelector(
+    ".linkedin-enhanced-data-list"
+  ) as HTMLElement;
+  if (linkedInEnhancedDataList) {
+    linkedInEnhancedDataContainer.removeChild(linkedInEnhancedDataList);
+  }
+
+  linkedInEnhancedDataList = document.createElement("ul");
+  linkedInEnhancedDataList.className = "linkedin-enhanced-data-list";
 
   data.forEach((item: any) => {
     const li = document.createElement("li");
+    li.className = "linkedin-enhanced-data-list-item";
     li.textContent = `Level: ${item.levelNameHumanFriendly}, Comp: ${item.avgTotalCompensation}`;
-    ul.appendChild(li);
+    linkedInEnhancedDataList.appendChild(li);
   });
-
-  newDiv.appendChild(ul);
-  newDiv.className = "levels-fyi-data-container";
-  elem?.append(newDiv);
+  linkedInEnhancedDataContainer.appendChild(linkedInEnhancedDataList);
 };
+
+// <----- Dropdown List ----->
+const getCountrySelectDropdown = (): HTMLSelectElement => {
+  const countrySelect = document.createElement("select");
+  countrySelect.className = "linkedin-enhanced-country-select";
+  const usaChild: HTMLOptionElement = document.createElement("option");
+  usaChild.value = "usa";
+  usaChild.textContent = "United States";
+  countrySelect.appendChild(usaChild);
+
+  const canadaChild: HTMLOptionElement = document.createElement("option");
+  canadaChild.value = "canada";
+  canadaChild.textContent = "Canada";
+  countrySelect.appendChild(canadaChild);
+  countrySelect.addEventListener("change", onCountrySelectChange);
+  return countrySelect;
+};
+
+const onCountrySelectChange = (event: Event) => {
+  const selectElement = event.target as HTMLSelectElement;
+  const selectedCountryValue = selectElement.value;
+  const newCountry = LEVELS_FYI_COUNTRY_MAPPINGS[selectedCountryValue];
+  activeCountry = newCountry;
+  refreshInformation();
+};
+
+// <----- Dropdown List OnChange ----->
+
+// <----- Draggable Info Box ----->
+const dragElement = (element: HTMLElement) => {
+  var pos1 = 0,
+    pos2 = 0,
+    pos3 = 0,
+    pos4 = 0;
+  element.onmousedown = dragMouseDown;
+  function dragMouseDown(event: MouseEvent) {
+    if (event.target instanceof HTMLSelectElement) {
+      return;
+    }
+    event.preventDefault();
+    // get the mouse cursor position at startup:
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    document.onmouseup = closeDragElement;
+    // call a function whenever the cursor moves:
+    document.onmousemove = elementDrag;
+  }
+
+  function elementDrag(event: MouseEvent) {
+    event.preventDefault();
+    // calculate the new cursor position:
+    pos1 = pos3 - event.clientX;
+    pos2 = pos4 - event.clientY;
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    // set the element's new position:
+    element.style.top = element.offsetTop - pos2 + "px";
+    element.style.left = element.offsetLeft - pos1 + "px";
+  }
+
+  function closeDragElement() {
+    // stop moving when mouse button is released:
+    document.onmouseup = null;
+    document.onmousemove = null;
+  }
+};
+// <----- Draggable Info Box ----->
