@@ -58,7 +58,8 @@ const LEVELS_FYI_COUNTRY_MAPPINGS: {
     countryHumanFriendlyName: "United States",
   },
 };
-const COMPENSATION_DATA_CACHE: CompensationDataCache = {};
+let COMPENSATION_DATA_CACHE: CompensationDataCache = {};
+const COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY = "COMPENSATION_DATA_CACHE";
 
 // <---- Constants ---->
 
@@ -144,13 +145,15 @@ export const getCompensationDataForCompany = async (
 const getCompensationAndLevelData = async (
   company: Company
 ): Promise<CompensationAndLevel[]> => {
-  const cachedCompensationData = getElementFromCache(
+  const cachedCompensationData = await getElementFromCache(
     company.companySlug,
     activeCountry.countryShortName
   );
   if (cachedCompensationData) {
+    console.log("CACHE HIT!");
     return cachedCompensationData;
   }
+  console.log("CACHE MISS!");
   const compensationDataUrls: string[] = getCompensationDataUrls(company);
   const compensationPromises = compensationDataUrls.map((url) =>
     getCompensationDataFromUrl(url)
@@ -435,7 +438,17 @@ const dragElement = (element: HTMLElement) => {
 // <----- Draggable Info Box ----->
 
 // <----- Cache Helper ----->
-const getElementFromCache = (company: string, country: string) => {
+const getElementFromCache = async (company: string, country: string) => {
+  if (Object.keys(COMPENSATION_DATA_CACHE).length === 0) {
+    const localStorageGetResult = await chrome.storage.local.get(
+      COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY
+    );
+
+    if (localStorageGetResult[COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY]) {
+      COMPENSATION_DATA_CACHE =
+        localStorageGetResult[COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY];
+    }
+  }
   return COMPENSATION_DATA_CACHE[company]?.[country] ?? null;
 };
 
@@ -444,10 +457,12 @@ const setElementInCache = (
   country: string,
   compensationData: CompensationAndLevel[]
 ) => {
-  if (!COMPENSATION_DATA_CACHE?.[company]) {
+  if (!COMPENSATION_DATA_CACHE[company]) {
     COMPENSATION_DATA_CACHE[company] = {};
   }
   COMPENSATION_DATA_CACHE[company][country] = compensationData;
+  chrome.storage.local.set({
+    [COMPENSATION_DATA_CACHE_LOCAL_STORAGE_KEY]: COMPENSATION_DATA_CACHE,
+  });
 };
-
 // <----- Cache Helper ----->
