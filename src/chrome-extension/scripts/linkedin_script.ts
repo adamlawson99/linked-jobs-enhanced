@@ -167,7 +167,8 @@ const getCompensationAndLevelData = async (
       getCompensationDataFromUrl(url)
     );
     const result = await Promise.all(compensationPromises);
-    compensationData = result.filter((result) => result !== undefined);
+    console.log("compensationPromises: " + JSON.stringify(result));
+    compensationData = result.filter((result) => result != null);
   }
   setElementInCache(
     company.companySlug,
@@ -190,16 +191,23 @@ const getCompensationDataFromUrl = async (
     );
   }
   const responseText = await response.text();
-  const responseJson = JSON.parse(responseText)["pageProps"];
+  const responseJson = JSON.parse(responseText);
   let compensationAndLevelData;
   try {
     compensationAndLevelData = {
-      avgTotalCompensation:
-        responseJson["companyJobFamilyLevelLocationStats"]["totalCompensation"][
-          "avg"
-        ],
-      levelSlug: responseJson["levelSlug"],
-      levelNameHumanFriendly: responseJson["level"],
+      avgTotalCompensation: getFieldFromJsonObject(
+        responseJson,
+        "pageProps",
+        "companyJobFamilyLevelLocationStats",
+        "totalCompensation",
+        "avg"
+      ),
+      levelSlug: getFieldFromJsonObject(responseJson, "pageProps", "levelSlug"),
+      levelNameHumanFriendly: getFieldFromJsonObject(
+        responseJson,
+        "pageProps",
+        "level"
+      ),
     };
   } catch (err) {}
   return compensationAndLevelData;
@@ -235,8 +243,14 @@ export const getCompanyInformationFromLevels = async (
   }
   const responseJson = JSON.parse(responseData.content!);
   return {
-    companySlug: responseJson["props"]["pageProps"]["company"]["slug"],
-    buildId: responseJson["buildId"],
+    companySlug: getFieldFromJsonObject(
+      responseJson,
+      "props",
+      "pageProps",
+      "company",
+      "slug"
+    ),
+    buildId: getFieldFromJsonObject(responseJson, "buildId"),
     levels: getLevelsFromJson(responseJson),
   };
 };
@@ -309,12 +323,17 @@ const extractResponseData = (
 
 // JSON Helpers
 const getLevelsFromJson = (responseJson: any): Level[] => {
-  const allLevelsRawData =
-    responseJson["props"]["pageProps"]["levels"]["levels"];
+  const allLevelsRawData = getFieldFromJsonObject(
+    responseJson,
+    "props",
+    "pageProps",
+    "levels",
+    "levels"
+  );
   return allLevelsRawData.map((level: any) => {
     return {
-      levelSlug: level["titleSlugs"][0],
-      levelNameHumanFriendly: level["titles"][0],
+      levelSlug: getFieldFromJsonObject(level, "titleSlugs")[0],
+      levelNameHumanFriendly: getFieldFromJsonObject(level, "titles")[0],
     };
   });
 };
@@ -416,8 +435,10 @@ const refreshInformation = async () => {
 
 // <----- Dropdown List ----->
 const getCountrySelectDropdown = (): HTMLSelectElement => {
-  const countrySelect = document.createElement("select");
-  countrySelect.className = "linkedin-enhanced-country-select";
+  const countrySelect = createHtmlElementWithClass(
+    "select",
+    "linkedin-enhanced-country-select"
+  ) as HTMLSelectElement;
   const usaChild: HTMLOptionElement = document.createElement("option");
   usaChild.value = "usa";
   usaChild.textContent = "United States";
@@ -567,6 +588,16 @@ const createHtmlElementWithClass = (
   const element = document.createElement(elementType);
   element.className = className;
   return element;
+};
+
+const getFieldFromJsonObject = (jsonObject: any, ...fields: string[]) => {
+  let result;
+  let currentJsonObject = jsonObject;
+  for (let field of fields) {
+    result = currentJsonObject[field];
+    currentJsonObject = currentJsonObject[field];
+  }
+  return result;
 };
 
 // <----- Random Helpers ----->
