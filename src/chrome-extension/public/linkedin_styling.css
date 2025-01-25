@@ -81,6 +81,11 @@
   background-color: #f2f2f2;
 }
 
+.linkedin-enhanced-error-message {
+  color: red;
+  font-weight: bold;
+}
+
 .linkedin-enhanced-loading-container {
   display: none;
   justify-content: center;

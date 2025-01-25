@@ -24,6 +24,8 @@ const CONFIG = {
     COMPANY_INFO: "linkedin-enhanced-company-info",
     COMPANY_INFO_TITLE: "linkedin-enhanced-company-info-title",
     COMPANY_INFO_LINK: "linkedin-enhanced-company-info-link",
+    ERROR_CONTAINER: "linkedin-enhanced-error-container",
+    ERROR_CONTAINER_MESSAGE: "linkedin-enhanced-error-message",
   },
   URLS: {
     LEVELS_FYI: {
@@ -204,9 +206,7 @@ const getCompensationDataFromUrl = async (
 ): Promise<CompensationAndLevel | undefined> => {
   const response = await fetchResource(url);
   if (!response.ok) {
-    throw new Error(
-      `Error fetching company data from Levels. Response status: ${response.status}`
-    );
+    throw new Error(`Error fetching compensation data`);
   }
   const responseText = await response.text();
   const responseJson = JSON.parse(responseText);
@@ -247,9 +247,7 @@ const getCompanyInformationFromLevels = async (
   const companyPageUrl = buildLevelsCompanyPageUrl(company);
   const response = await fetchResource(companyPageUrl);
   if (!response.ok) {
-    throw new Error(
-      `Error fetching company data from Levels. Response status: ${response.status}`
-    );
+    throw new Error(`Error fetching data for company [${company}]`);
   }
   const responseText = await response.text();
   const responseData = extractResponseDataFromHTML(
@@ -257,7 +255,7 @@ const getCompanyInformationFromLevels = async (
     CONFIG.URLS.LEVELS_FYI.DATA_SCRIPT_TAG
   );
   if (!responseData.success) {
-    throw new Error(`Error parsing response: ${responseData.error}`);
+    throw new Error(`Error parsing response data for company [${company}]`);
   }
   const responseJson = JSON.parse(responseData.content!);
   return {
@@ -383,7 +381,6 @@ const fetchResource = (
 };
 
 const loadLinkedInEnhancedWidget = () => {
-  //Unload the current child if it exists
   const parentElementTarget = getElementByClassName(
     "scaffold-layout--list-detail"
   ) as HTMLElement;
@@ -426,29 +423,36 @@ const loadLinkedInEnhancedWidget = () => {
 
 const refreshInformation = async () => {
   const linkedInEnhancedDataContainer = loadLinkedInEnhancedWidget();
-  const companyData = await getCompanyData(activeCompany);
-  const compensationData = await getCompensationDataForCompany(companyData);
+  try {
+    unloadErrorContainer();
+    const companyData = await getCompanyData(activeCompany);
+    const compensationData = await getCompensationDataForCompany(companyData);
+    // Unload the current table if present
+    let linkedInEnhancedDataTable = getElementByClassName(
+      CONFIG.CLASSES.COMP_DATA_TABLE
+    ) as HTMLElement;
+    if (linkedInEnhancedDataTable) {
+      linkedInEnhancedDataContainer.removeChild(linkedInEnhancedDataTable);
+    }
 
-  // Unload the current table if present
-  let linkedInEnhancedDataTable = getElementByClassName(
-    CONFIG.CLASSES.COMP_DATA_TABLE
-  ) as HTMLElement;
-  if (linkedInEnhancedDataTable) {
-    linkedInEnhancedDataContainer.removeChild(linkedInEnhancedDataTable);
+    //unload the company info div if present
+    let companyInfoDiv = getElementByClassName(
+      CONFIG.CLASSES.COMPANY_INFO
+    ) as HTMLElement;
+    if (companyInfoDiv) {
+      linkedInEnhancedDataContainer.removeChild(companyInfoDiv);
+    }
+    companyInfoDiv = getCompanyInfoDiv(companyData);
+    linkedInEnhancedDataContainer.appendChild(companyInfoDiv);
+
+    linkedInEnhancedDataTable = getCompensationDataTable(compensationData);
+    linkedInEnhancedDataContainer.appendChild(linkedInEnhancedDataTable);
+  } catch (err) {
+    if (err instanceof Error) {
+      handleErrorFetchingData(err);
+      return;
+    }
   }
-
-  //unload the company info div if present
-  let companyInfoDiv = getElementByClassName(
-    CONFIG.CLASSES.COMPANY_INFO
-  ) as HTMLElement;
-  if (companyInfoDiv) {
-    linkedInEnhancedDataContainer.removeChild(companyInfoDiv);
-  }
-  companyInfoDiv = getCompanyInfoDiv(companyData);
-  linkedInEnhancedDataContainer.appendChild(companyInfoDiv);
-
-  linkedInEnhancedDataTable = getCompensationDataTable(compensationData);
-  linkedInEnhancedDataContainer.appendChild(linkedInEnhancedDataTable);
 };
 
 // <----- Compensation Data Table ----->
@@ -509,6 +513,23 @@ const getCompanyInfoDiv = (company: Company): HTMLElement => {
   companyInfoContainer.appendChild(companyLink);
   return companyInfoContainer;
 };
+// <---- Company Info Div ---->
+
+// <---- Error container Info Div ---->
+const getErrorContainerDiv = (errorMessage: string): HTMLElement => {
+  const errorContainer = createHtmlElementWithClass(
+    "div",
+    CONFIG.CLASSES.ERROR_CONTAINER
+  );
+  const errorContainerMessage = createHtmlElementWithClass(
+    "p",
+    CONFIG.CLASSES.ERROR_CONTAINER_MESSAGE
+  );
+  errorContainerMessage.innerText = errorMessage;
+  errorContainer.appendChild(errorContainerMessage);
+  return errorContainer;
+};
+// <---- Company Info Div ---->
 
 // <----- Dropdown Lists ----->
 const getCountrySelectDropdown = (): HTMLElement => {
@@ -637,9 +658,7 @@ const setElementInCache = (
 const getExchangeRate = async (): Promise<number> => {
   const response = await fetch(CONFIG.URLS.EXCHANGE_RATE);
   if (!response.ok) {
-    throw new Error(
-      `Error fetching company data from Levels. Response status: ${response.status}`
-    );
+    throw new Error(`Error fetching exchange rate.`);
   }
   const responseText = await response.text();
 
@@ -648,7 +667,7 @@ const getExchangeRate = async (): Promise<number> => {
     CONFIG.XML_TAGS.CURRENCY_VALUE
   );
   if (!responseData.success) {
-    throw new Error(`Error parsing response: ${responseData.error}`);
+    throw new Error(`Error parsing response when trying to get exchange rate`);
   }
   return parseFloat(responseData.content!);
 };
@@ -717,6 +736,36 @@ const dragElement = (element: HTMLElement) => {
 };
 // <----- Draggable Info Box ----->
 
+// <---- Error Handler ---->
+const handleErrorFetchingData = (err: Error) => {
+  const linkedInEnhancedDataContainer = loadLinkedInEnhancedWidget();
+  hideItemIfExists(CONFIG.CLASSES.COMP_DATA_TABLE);
+  hideItemIfExists(CONFIG.CLASSES.COMPANY_INFO);
+
+  //Unload the existing error container if present
+  let errorContainer = getElementByClassName(
+    CONFIG.CLASSES.ERROR_CONTAINER
+  ) as HTMLElement;
+  if (errorContainer) {
+    linkedInEnhancedDataContainer.removeChild(errorContainer);
+  }
+  errorContainer = getErrorContainerDiv(err.message);
+  linkedInEnhancedDataContainer.appendChild(errorContainer);
+};
+
+const unloadErrorContainer = () => {
+  const linkedInEnhancedDataContainer = loadLinkedInEnhancedWidget();
+
+  //Unload the existing error container if present
+  let errorContainer = getElementByClassName(
+    CONFIG.CLASSES.ERROR_CONTAINER
+  ) as HTMLElement;
+  if (errorContainer) {
+    linkedInEnhancedDataContainer.removeChild(errorContainer);
+  }
+};
+// <---- Error Handler ---->
+
 // <----- Random Helpers ----->
 const createHtmlElementWithClass = (
   elementType: string,
@@ -760,12 +809,14 @@ const getLoadingSpinner = (): HTMLElement => {
 const updateContainerBeforeDataLoad = () => {
   hideItemIfExists(CONFIG.CLASSES.COMP_DATA_TABLE);
   hideItemIfExists(CONFIG.CLASSES.COMPANY_INFO);
+  hideItemIfExists(CONFIG.CLASSES.ERROR_CONTAINER);
 
   showItemIfExists(CONFIG.CLASSES.LOADING_SPINNER);
 };
 
 const updateContainerAfterDataLoad = () => {
   hideItemIfExists(CONFIG.CLASSES.LOADING_SPINNER);
+  hideItemIfExists(CONFIG.CLASSES.ERROR_CONTAINER);
 
   showItemIfExists(CONFIG.CLASSES.COMP_DATA_TABLE);
   showItemIfExists(CONFIG.CLASSES.COMPANY_INFO);
