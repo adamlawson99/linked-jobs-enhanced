@@ -1,9 +1,26 @@
+try {
+} catch (err) {
+  console.log(err);
+}
+// <---- Enums ---->
+enum Currency {
+  CAD = "CAD",
+  USD = "USD",
+}
+// <---- Enums ---->
+
 const CONFIG = {
-  SELECTORS: {
-    ACTIVE_ITEM: ".job-details-jobs-unified-top-card__company-name",
-    PARENT_CONTAINER: ".scaffold-layout--list-detail",
-    DATA_CONTAINER: ".linkedin-enhanced-data-container",
-    DATA_LIST: ".linkedin-enhanced-data-list",
+  CLASSES: {
+    ACTIVE_ITEM: "job-details-jobs-unified-top-card__company-name",
+    PARENT_CONTAINER: "scaffold-layout--list-detail",
+    DATA_CONTAINER: "linkedin-enhanced-data-container",
+    DATA_CONTAINER_TITLE: "linkedin-enhanced-title",
+    COUNTRY_SELECTOR: "linkedin-enhanced-country-select",
+    CURRENCY_SELECTOR: "linkedin-enhanced-currency-select",
+    LOADING_SPINNER: "linkedin-enhanced-loading-container",
+    SELECT_DIV: "linkedin-enhanced-select-div",
+    SELECT_ITEM_TITLE: "linkedin-enhanced-select-item-title",
+    COMP_DATA_TABLE: "linkedin-enhanced-table",
   },
   URLS: {
     LEVELS_FYI: {
@@ -25,11 +42,13 @@ const CONFIG = {
         countryCode: 43,
         countryShortName: "canada",
         countryHumanFriendlyName: "Canada",
+        currency: Currency.CAD,
       },
       usa: {
         countryCode: 254,
         countryShortName: "usa",
         countryHumanFriendlyName: "United States",
+        currency: Currency.USD,
       },
     },
   },
@@ -80,24 +99,25 @@ let activeCompany: string;
 let activeCountry: LevelsCountryConfiguration =
   CONFIG.LOCALE.LEVELS_FYI_COUNTRY_MAPPINGS["usa"];
 let usdToCadExchangeRate: number;
+let displayCurrency: Currency = Currency.USD;
 // <---- Global Vars ---->
 
 const waitForInitialPageLoad = () => {
   return new Promise((resolve) => {
-    if (document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM)) {
-      activeItemElement = document.querySelector(
-        CONFIG.SELECTORS.ACTIVE_ITEM
+    if (getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM)) {
+      activeItemElement = getElementByClassName(
+        CONFIG.CLASSES.ACTIVE_ITEM
       ) as HTMLElement;
-      return resolve(document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM));
+      return resolve(getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM));
     }
 
     const observer = new MutationObserver((_) => {
-      if (document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM)) {
-        activeItemElement = document.querySelector(
-          CONFIG.SELECTORS.ACTIVE_ITEM
+      if (getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM)) {
+        activeItemElement = getElementByClassName(
+          CONFIG.CLASSES.ACTIVE_ITEM
         ) as HTMLElement;
         observer.disconnect();
-        resolve(document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM));
+        resolve(getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM));
       }
     });
 
@@ -109,9 +129,9 @@ const waitForInitialPageLoad = () => {
 };
 
 const documentObserver = new MutationObserver((_) => {
-  if (document.querySelector(CONFIG.SELECTORS.ACTIVE_ITEM)) {
-    activeItemElement = document.querySelector(
-      CONFIG.SELECTORS.ACTIVE_ITEM
+  if (getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM)) {
+    activeItemElement = getElementByClassName(
+      CONFIG.CLASSES.ACTIVE_ITEM
     ) as HTMLElement;
     registerAfterInitialPageLoad();
   }
@@ -151,7 +171,31 @@ export const getCompensationDataForCompany = async (
   company: string
 ): Promise<CompensationAndLevel[]> => {
   const companyData = await getCompanyInformationFromLevels(company);
-  return await getCompensationAndLevelData(companyData);
+  const compensationDataFromCache = await getCompensationAndLevelDataFromCache(
+    companyData
+  );
+  if (compensationDataFromCache) {
+    return compensationDataFromCache;
+  }
+  hideItemIfExists(CONFIG.CLASSES.COMP_DATA_TABLE);
+  showItemIfExists(CONFIG.CLASSES.LOADING_SPINNER);
+  const compensationData = await getCompensationAndLevelData(companyData);
+  showItemIfExists(CONFIG.CLASSES.COMP_DATA_TABLE);
+  hideItemIfExists(CONFIG.CLASSES.LOADING_SPINNER);
+  return compensationData;
+};
+
+const getCompensationAndLevelDataFromCache = async (
+  company: Company
+): Promise<CompensationAndLevel[]> => {
+  const compensationData = await getElementFromCache(
+    company.companySlug,
+    activeCountry.countryShortName
+  );
+  if (compensationData && displayCurrency === Currency.CAD) {
+    return convertCompensationDataToCad(compensationData);
+  }
+  return compensationData;
 };
 
 const getCompensationAndLevelData = async (
@@ -161,23 +205,22 @@ const getCompensationAndLevelData = async (
     company.companySlug,
     activeCountry.countryShortName
   );
-  if (!compensationData) {
-    const compensationDataUrls: string[] = getCompensationDataUrls(company);
-    const compensationPromises = compensationDataUrls.map((url) =>
-      getCompensationDataFromUrl(url)
-    );
-    const result = await Promise.all(compensationPromises);
-    console.log("compensationPromises: " + JSON.stringify(result));
-    compensationData = result.filter((result) => result != null);
-  }
+
+  const compensationDataUrls: string[] = getCompensationDataUrls(company);
+  const compensationPromises = compensationDataUrls.map((url) =>
+    getCompensationDataFromUrl(url)
+  );
+  const result = await Promise.all(compensationPromises);
+  compensationData = result.filter((result) => result != null);
   setElementInCache(
     company.companySlug,
     activeCountry.countryShortName,
     compensationData
   );
-  if (activeCountry.countryShortName === "canada") {
+  if (displayCurrency === Currency.CAD) {
     return convertCompensationDataToCad(compensationData);
   }
+
   return compensationData;
 };
 
@@ -366,23 +409,23 @@ const fetchResource = (
 
 const loadLinkedInEnhancedWidget = () => {
   //Unload the current child if it exists
-  const parentElementTarget = document.querySelector(
-    ".scaffold-layout--list-detail"
+  const parentElementTarget = getElementByClassName(
+    "scaffold-layout--list-detail"
   ) as HTMLElement;
 
   // Create the data container if it doesn't exists
-  let linkedInEnhancedDataContainer = document.querySelector(
-    ".linkedin-enhanced-data-container"
+  let linkedInEnhancedDataContainer = getElementByClassName(
+    CONFIG.CLASSES.DATA_CONTAINER
   ) as HTMLElement;
   if (!linkedInEnhancedDataContainer) {
     linkedInEnhancedDataContainer = createHtmlElementWithClass(
       "div",
-      "linkedin-enhanced-data-container"
+      CONFIG.CLASSES.DATA_CONTAINER
     );
 
     const linkedInEnhancedTitle = createHtmlElementWithClass(
       "h1",
-      "linkedin-enhanced-title"
+      CONFIG.CLASSES.DATA_CONTAINER_TITLE
     );
 
     linkedInEnhancedTitle.innerText = "LinkedIn Jobs Enhanced";
@@ -396,49 +439,91 @@ const loadLinkedInEnhancedWidget = () => {
 
     // Add the country select dropdown
     linkedInEnhancedDataContainer.appendChild(getCountrySelectDropdown());
+
+    // Add the currency select dropdown
+    linkedInEnhancedDataContainer.appendChild(getCurrencySelectDropdown());
+
+    // Add the loading spinner to the dropdown
+
+    linkedInEnhancedDataContainer.appendChild(getLoadingSpinner());
   }
   return linkedInEnhancedDataContainer;
 };
 
 const refreshInformation = async () => {
+  const linkedInEnhancedDataContainer = loadLinkedInEnhancedWidget();
   const compensationData = await getCompensationDataForCompany(activeCompany);
-  // Create the data container if it doesn't exists
-  let linkedInEnhancedDataContainer = document.querySelector(
-    ".linkedin-enhanced-data-container"
+
+  // Unload the current table if present
+  let linkedInEnhancedDataTable = getElementByClassName(
+    CONFIG.CLASSES.COMP_DATA_TABLE
   ) as HTMLElement;
-  if (!linkedInEnhancedDataContainer) {
-    linkedInEnhancedDataContainer = loadLinkedInEnhancedWidget();
-  }
-  // Unload the current list if present
-  let linkedInEnhancedDataList = document.querySelector(
-    ".linkedin-enhanced-data-list"
-  ) as HTMLElement;
-  if (linkedInEnhancedDataList) {
-    linkedInEnhancedDataContainer.removeChild(linkedInEnhancedDataList);
+  if (linkedInEnhancedDataTable) {
+    linkedInEnhancedDataContainer.removeChild(linkedInEnhancedDataTable);
   }
 
-  linkedInEnhancedDataList = createHtmlElementWithClass(
-    "ul",
-    "linkedin-enhanced-data-list"
-  );
-
-  compensationData.forEach((item: any) => {
-    const li = createHtmlElementWithClass(
-      "li",
-      "linkedin-enhanced-data-list-item"
-    );
-    li.textContent = `Level: ${item.levelNameHumanFriendly}, Comp: ${item.avgTotalCompensation}`;
-    linkedInEnhancedDataList.appendChild(li);
-  });
-  linkedInEnhancedDataContainer.appendChild(linkedInEnhancedDataList);
+  linkedInEnhancedDataTable = getCompensationDataTable(compensationData);
+  linkedInEnhancedDataContainer.appendChild(linkedInEnhancedDataTable);
 };
 
-// <----- Dropdown List ----->
-const getCountrySelectDropdown = (): HTMLSelectElement => {
+// <----- Compensation Data Table ----->
+const getCompensationDataTable = (compensationData: CompensationAndLevel[]) => {
+  const compDataTable = createHtmlElementWithClass(
+    "table",
+    CONFIG.CLASSES.COMP_DATA_TABLE
+  );
+  const compDataTableHead = document.createElement("thead");
+  const compDataTableHeadRow = document.createElement("tr");
+  compDataTableHead.appendChild(compDataTableHeadRow);
+  const compDataTableHeadHeaderLevel = document.createElement("th");
+  compDataTableHeadHeaderLevel.innerText = "Level";
+  compDataTableHeadRow.appendChild(compDataTableHeadHeaderLevel);
+  const compDataTableHeadHeaderCompensation = document.createElement("th");
+  compDataTableHeadHeaderCompensation.innerText = "Compensation";
+  compDataTableHeadRow.appendChild(compDataTableHeadHeaderCompensation);
+
+  compDataTable.appendChild(compDataTableHead);
+
+  const compDataTableBody = document.createElement("tbody");
+  compDataTable.appendChild(compDataTableBody);
+  compensationData.forEach((item: any) => {
+    const compDataTableBodyRow = document.createElement("tr");
+    const compDataTableBodyLevelName = document.createElement("td");
+    compDataTableBodyLevelName.innerText = `${item.levelNameHumanFriendly}`;
+    compDataTableBodyRow.appendChild(compDataTableBodyLevelName);
+    const compDataTableBodyTotalCompensation = document.createElement("td");
+    compDataTableBodyTotalCompensation.innerText = `${item.avgTotalCompensation}`;
+    compDataTableBodyRow.appendChild(compDataTableBodyTotalCompensation);
+    compDataTableBody.appendChild(compDataTableBodyRow);
+  });
+  return compDataTable;
+};
+
+// <----- Compensation Data Table ----->
+
+// <----- Dropdown Lists ----->
+const getCountrySelectDropdown = (): HTMLElement => {
+  const linkedinEnhancedSelectDiv = createHtmlElementWithClass(
+    "div",
+    CONFIG.CLASSES.SELECT_DIV
+  );
+
+  const countrySelectTitle = createHtmlElementWithClass(
+    "h1",
+    CONFIG.CLASSES.SELECT_ITEM_TITLE
+  );
+
+  countrySelectTitle.innerText = "Country";
+
+  linkedinEnhancedSelectDiv.appendChild(countrySelectTitle);
+
   const countrySelect = createHtmlElementWithClass(
     "select",
-    "linkedin-enhanced-country-select"
+    CONFIG.CLASSES.COUNTRY_SELECTOR
   ) as HTMLSelectElement;
+
+  linkedinEnhancedSelectDiv.appendChild(countrySelect);
+
   const usaChild: HTMLOptionElement = document.createElement("option");
   usaChild.value = "usa";
   usaChild.textContent = "United States";
@@ -449,7 +534,43 @@ const getCountrySelectDropdown = (): HTMLSelectElement => {
   canadaChild.textContent = "Canada";
   countrySelect.appendChild(canadaChild);
   countrySelect.addEventListener("change", onCountrySelectChange);
-  return countrySelect;
+  return linkedinEnhancedSelectDiv;
+};
+
+const getCurrencySelectDropdown = (): HTMLElement => {
+  const linkedinEnhancedSelectDiv = createHtmlElementWithClass(
+    "div",
+    CONFIG.CLASSES.SELECT_DIV
+  );
+
+  const currencySelectTitle = createHtmlElementWithClass(
+    "h1",
+    CONFIG.CLASSES.SELECT_ITEM_TITLE
+  );
+
+  currencySelectTitle.innerText = "Display Currency";
+
+  linkedinEnhancedSelectDiv.appendChild(currencySelectTitle);
+
+  const countrySelect = createHtmlElementWithClass(
+    "select",
+    CONFIG.CLASSES.CURRENCY_SELECTOR
+  ) as HTMLSelectElement;
+
+  linkedinEnhancedSelectDiv.appendChild(countrySelect);
+
+  const usdChild: HTMLOptionElement = document.createElement("option");
+  usdChild.value = "USD";
+  usdChild.textContent = "USD";
+  countrySelect.appendChild(usdChild);
+
+  const cadChild: HTMLOptionElement = document.createElement("option");
+  cadChild.value = "CAD";
+  cadChild.textContent = "CAD";
+  countrySelect.appendChild(cadChild);
+  countrySelect.addEventListener("change", onCurrencySelectChange);
+
+  return linkedinEnhancedSelectDiv;
 };
 
 const onCountrySelectChange = (event: Event) => {
@@ -459,6 +580,14 @@ const onCountrySelectChange = (event: Event) => {
     //@ts-ignore
     CONFIG.LOCALE.LEVELS_FYI_COUNTRY_MAPPINGS[selectedCountryValue];
   activeCountry = newCountry;
+  refreshInformation();
+};
+
+const onCurrencySelectChange = (event: Event) => {
+  const selectElement = event.target as HTMLSelectElement;
+  const selectedCurrencyValue = selectElement.value;
+  //@ts-ignore
+  displayCurrency = Currency[selectedCurrencyValue];
   refreshInformation();
 };
 
@@ -476,7 +605,6 @@ const getElementFromCache = async (company: string, country: string) => {
         localStorageGetResult[CONFIG.STORAGE_KEYS.COMPENSATION_CACHE];
     }
   }
-  getExchangeRate();
   return compensationDataCache[company]?.[country] ?? null;
 };
 
@@ -598,6 +726,46 @@ const getFieldFromJsonObject = (jsonObject: any, ...fields: string[]) => {
     currentJsonObject = currentJsonObject[field];
   }
   return result;
+};
+
+const getLoadingSpinner = (): HTMLElement => {
+  const loadingDiv = createHtmlElementWithClass(
+    "div",
+    "linkedin-enhanced-loading-container"
+  );
+  const loadingSpinner = createHtmlElementWithClass(
+    "div",
+    "linkedin-enhanced-spinner"
+  );
+  const loadingText = createHtmlElementWithClass(
+    "div",
+    "linkedin-enhanced-loading-text"
+  );
+
+  loadingText.innerText = "Loading";
+  loadingDiv.appendChild(loadingText);
+  loadingDiv.appendChild(loadingSpinner);
+  return loadingDiv;
+};
+
+const showItemIfExists = (className: string) => {
+  const element = getElementByClassName(className) as HTMLElement;
+  if (!element) {
+    return;
+  }
+  element.style.display = "flex";
+};
+
+const hideItemIfExists = (className: string) => {
+  const element = getElementByClassName(className) as HTMLElement;
+  if (!element) {
+    return;
+  }
+  element.style.display = "none";
+};
+
+const getElementByClassName = (className: string): HTMLElement => {
+  return document.querySelector(`.${className}`) as HTMLElement;
 };
 
 // <----- Random Helpers ----->
