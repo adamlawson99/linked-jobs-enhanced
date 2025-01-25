@@ -36,6 +36,8 @@ This Chrome extension enhances your LinkedIn Jobs page by adding extra informati
 
 1. Clone this repository
 2. Following the instructions https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked to load the unpacked extension
+3. Go to the LinkedIn jobs search page https://www.linkedin.com/jobs/search/ and begin searching for jobs
+4. The extension will automatically fetch data from levels.fyi and display it on the page
 
 ### Resources Used
 
