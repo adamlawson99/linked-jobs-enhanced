@@ -8,18 +8,20 @@
   text-align: center;
   display: grid !important;
   grid-template-columns: 1fr;
+  padding-left: 8px;
+  padding-right: 8px;
+  padding-top: 10px;
 }
 
 .linkedin-enhanced-data-list {
   list-style-type: none;
-  padding: 10px 25px 0 25px;
+  padding: 10px 8px 0 8px;
   margin: 0;
 }
 
 .linkedin-enhanced-title {
   font-size: 1.75rem;
   font-weight: bold;
-  text-decoration: underline;
   margin-bottom: 10px;
 }
 
@@ -39,7 +41,7 @@
   justify-items: start;
   width: 100%;
   margin-bottom: 10px;
-  padding-left: 25px;
+  padding-left: 8px;
 }
 
 .linkedin-enhanced-country-select {
@@ -48,6 +50,35 @@
 
 .linkedin-enhanced-currency-select {
   z-index: 9;
+}
+
+.linkedin-enhanced-company-info {
+  align-self: start;
+  justify-self: start;
+  align-items: start;
+  justify-items: start;
+  width: 100%;
+  margin-bottom: 10px;
+  padding-left: 8px;
+}
+
+.linkedin-enhanced-company-info-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.linkedin-enhanced-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.linkedin-enhanced-table th,
+.linkedin-enhanced-table td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+.linkedin-enhanced-table th {
+  background-color: #f2f2f2;
 }
 
 .linkedin-enhanced-loading-container {

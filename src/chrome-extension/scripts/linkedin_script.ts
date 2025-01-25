@@ -21,6 +21,9 @@ const CONFIG = {
     SELECT_DIV: "linkedin-enhanced-select-div",
     SELECT_ITEM_TITLE: "linkedin-enhanced-select-item-title",
     COMP_DATA_TABLE: "linkedin-enhanced-table",
+    COMPANY_INFO: "linkedin-enhanced-company-info",
+    COMPANY_INFO_TITLE: "linkedin-enhanced-company-info-title",
+    COMPANY_INFO_LINK: "linkedin-enhanced-company-info-link",
   },
   URLS: {
     LEVELS_FYI: {
@@ -138,21 +141,22 @@ const registerAfterInitialPageLoad = () => {
 
 // <---- Levels FYI Helper ---->
 
-export const getCompensationDataForCompany = async (
-  company: string
+const getCompanyData = async (company: string): Promise<Company> => {
+  return await getCompanyInformationFromLevels(company);
+};
+
+const getCompensationDataForCompany = async (
+  company: Company
 ): Promise<CompensationAndLevel[]> => {
-  const companyData = await getCompanyInformationFromLevels(company);
   const compensationDataFromCache = await getCompensationAndLevelDataFromCache(
-    companyData
+    company
   );
   if (compensationDataFromCache) {
     return compensationDataFromCache;
   }
-  hideItemIfExists(CONFIG.CLASSES.COMP_DATA_TABLE);
-  showItemIfExists(CONFIG.CLASSES.LOADING_SPINNER);
-  const compensationData = await getCompensationAndLevelData(companyData);
-  showItemIfExists(CONFIG.CLASSES.COMP_DATA_TABLE);
-  hideItemIfExists(CONFIG.CLASSES.LOADING_SPINNER);
+  updateContainerBeforeDataLoad();
+  const compensationData = await getCompensationAndLevelData(company);
+  updateContainerAfterDataLoad();
   return compensationData;
 };
 
@@ -237,7 +241,7 @@ const getCompensationDataUrls = (company: Company): string[] => {
   });
 };
 
-export const getCompanyInformationFromLevels = async (
+const getCompanyInformationFromLevels = async (
   company: string
 ): Promise<Company> => {
   const companyPageUrl = buildLevelsCompanyPageUrl(company);
@@ -415,7 +419,6 @@ const loadLinkedInEnhancedWidget = () => {
     linkedInEnhancedDataContainer.appendChild(getCurrencySelectDropdown());
 
     // Add the loading spinner to the dropdown
-
     linkedInEnhancedDataContainer.appendChild(getLoadingSpinner());
   }
   return linkedInEnhancedDataContainer;
@@ -423,7 +426,8 @@ const loadLinkedInEnhancedWidget = () => {
 
 const refreshInformation = async () => {
   const linkedInEnhancedDataContainer = loadLinkedInEnhancedWidget();
-  const compensationData = await getCompensationDataForCompany(activeCompany);
+  const companyData = await getCompanyData(activeCompany);
+  const compensationData = await getCompensationDataForCompany(companyData);
 
   // Unload the current table if present
   let linkedInEnhancedDataTable = getElementByClassName(
@@ -432,6 +436,16 @@ const refreshInformation = async () => {
   if (linkedInEnhancedDataTable) {
     linkedInEnhancedDataContainer.removeChild(linkedInEnhancedDataTable);
   }
+
+  //unload the company info div if present
+  let companyInfoDiv = getElementByClassName(
+    CONFIG.CLASSES.COMPANY_INFO
+  ) as HTMLElement;
+  if (companyInfoDiv) {
+    linkedInEnhancedDataContainer.removeChild(companyInfoDiv);
+  }
+  companyInfoDiv = getCompanyInfoDiv(companyData);
+  linkedInEnhancedDataContainer.appendChild(companyInfoDiv);
 
   linkedInEnhancedDataTable = getCompensationDataTable(compensationData);
   linkedInEnhancedDataContainer.appendChild(linkedInEnhancedDataTable);
@@ -471,6 +485,30 @@ const getCompensationDataTable = (compensationData: CompensationAndLevel[]) => {
 };
 
 // <----- Compensation Data Table ----->
+
+// <---- Company Info Div ---->
+const getCompanyInfoDiv = (company: Company): HTMLElement => {
+  const companyInfoContainer = createHtmlElementWithClass(
+    "div",
+    CONFIG.CLASSES.COMPANY_INFO
+  );
+  const companyNameTitle = createHtmlElementWithClass(
+    "h1",
+    CONFIG.CLASSES.COMPANY_INFO_TITLE
+  );
+  companyNameTitle.innerText = "Company";
+  companyInfoContainer.appendChild(companyNameTitle);
+
+  const companyLink = createHtmlElementWithClass(
+    "a",
+    CONFIG.CLASSES.COMPANY_INFO_LINK
+  ) as HTMLAnchorElement;
+  companyLink.href = buildLevelsCompanyPageUrl(company.companySlug);
+  companyLink.target = "_blank";
+  companyLink.textContent = `${company.companySlug}`;
+  companyInfoContainer.appendChild(companyLink);
+  return companyInfoContainer;
+};
 
 // <----- Dropdown Lists ----->
 const getCountrySelectDropdown = (): HTMLElement => {
@@ -717,6 +755,20 @@ const getLoadingSpinner = (): HTMLElement => {
   loadingDiv.appendChild(loadingText);
   loadingDiv.appendChild(loadingSpinner);
   return loadingDiv;
+};
+
+const updateContainerBeforeDataLoad = () => {
+  hideItemIfExists(CONFIG.CLASSES.COMP_DATA_TABLE);
+  hideItemIfExists(CONFIG.CLASSES.COMPANY_INFO);
+
+  showItemIfExists(CONFIG.CLASSES.LOADING_SPINNER);
+};
+
+const updateContainerAfterDataLoad = () => {
+  hideItemIfExists(CONFIG.CLASSES.LOADING_SPINNER);
+
+  showItemIfExists(CONFIG.CLASSES.COMP_DATA_TABLE);
+  showItemIfExists(CONFIG.CLASSES.COMPANY_INFO);
 };
 
 const showItemIfExists = (className: string) => {
