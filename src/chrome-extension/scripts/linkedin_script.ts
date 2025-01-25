@@ -102,32 +102,6 @@ let usdToCadExchangeRate: number;
 let displayCurrency: Currency = Currency.USD;
 // <---- Global Vars ---->
 
-const waitForInitialPageLoad = () => {
-  return new Promise((resolve) => {
-    if (getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM)) {
-      activeItemElement = getElementByClassName(
-        CONFIG.CLASSES.ACTIVE_ITEM
-      ) as HTMLElement;
-      return resolve(getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM));
-    }
-
-    const observer = new MutationObserver((_) => {
-      if (getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM)) {
-        activeItemElement = getElementByClassName(
-          CONFIG.CLASSES.ACTIVE_ITEM
-        ) as HTMLElement;
-        observer.disconnect();
-        resolve(getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM));
-      }
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-  });
-};
-
 const documentObserver = new MutationObserver((_) => {
   if (getElementByClassName(CONFIG.CLASSES.ACTIVE_ITEM)) {
     activeItemElement = getElementByClassName(
@@ -142,17 +116,14 @@ documentObserver.observe(document.body, {
   subtree: true,
 });
 
-waitForInitialPageLoad().then(() => {
-  const aTag = activeItemElement.children[0] as HTMLElement;
-  activeCompany = aTag.innerText.trim().toLowerCase();
-  refreshInformation();
-});
-
 const registerAfterInitialPageLoad = () => {
+  if (!activeItemElement || activeItemElement.children.length === 0) {
+    return;
+  }
   const observer = new MutationObserver((_) => {
     const aTag = activeItemElement.children[0] as HTMLElement;
     const newActiveCompany = aTag.innerText.trim().toLowerCase();
-    if (newActiveCompany === activeCompany) {
+    if (activeCompany && newActiveCompany === activeCompany) {
       return;
     }
     activeCompany = newActiveCompany;
