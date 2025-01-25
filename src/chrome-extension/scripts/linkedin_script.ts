@@ -1,7 +1,3 @@
-try {
-} catch (err) {
-  console.log(err);
-}
 // <---- Enums ---->
 enum Currency {
   CAD = "CAD",
