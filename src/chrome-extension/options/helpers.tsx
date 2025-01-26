@@ -3,33 +3,18 @@ import { CompanyData, CompanyIdCache } from "./types";
 const COMPANY_ID_CACHE = "COMPANY_ID_CACHE";
 
 export const getCompanyDataForTable = async (): Promise<CompanyData[]> => {
-  let companyIdCache = {};
-  const localStorageGetResult = await chrome.storage.local.get(
-    COMPANY_ID_CACHE
-  );
+  const result = await chrome.storage.local.get(COMPANY_ID_CACHE);
 
-  if (localStorageGetResult[COMPANY_ID_CACHE]) {
-    companyIdCache = localStorageGetResult[COMPANY_ID_CACHE];
-  }
+  const companyIdCache = result[COMPANY_ID_CACHE] as CompanyIdCache | undefined;
+
   if (!companyIdCache || Object.keys(companyIdCache).length === 0) {
     return [];
   }
 
-  companyIdCache = companyIdCache as CompanyIdCache;
-
-  const result: CompanyData[] = [];
-
-  Object.keys(companyIdCache).forEach((key) => {
-    //@ts-ignore
-    const cacheData = companyIdCache[key];
-    const companyData: CompanyData = {
-      companyName: key,
-      ...cacheData,
-    };
-    result.push(companyData);
-  });
-
-  return result;
+  return Object.entries(companyIdCache).map(([companyName, cacheData]) => ({
+    companyName,
+    ...cacheData,
+  }));
 };
 
 export const saveTableDataToCache = (companyData: CompanyData[]) => {

@@ -10,16 +10,16 @@ import {
 } from "@tanstack/react-table";
 import { CompanyData } from "./types";
 
-type Props = {
-  companyData: CompanyData[];
-  onSave: (companyData: CompanyData[]) => void;
-};
-
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
   }
 }
+
+type Props = {
+  companyData: CompanyData[];
+  onSave: (companyData: CompanyData[]) => void;
+};
 
 const defaultColumn: Partial<ColumnDef<CompanyData>> = {
   cell: ({ getValue, row: { index }, column: { id }, table }) => {
