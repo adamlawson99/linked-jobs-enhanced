@@ -33,6 +33,7 @@ const CONFIG = {
   },
   STORAGE_KEYS: {
     COMPENSATION_CACHE: "COMPENSATION_DATA_CACHE",
+    COMPANY_ID_CACHE: "COMPANY_ID_CACHE",
   },
   XML_TAGS: {
     CURRENCY_VALUE: "value",
@@ -91,10 +92,18 @@ interface CompensationDataCache {
   };
 }
 
+interface CompanyIdCache {
+  [companyName: string]: {
+    companyId?: string;
+    lastFetchSuccess: boolean;
+  };
+}
+
 // <---- Interfaces ---->
 
 // <---- Global Vars ---->
 let compensationDataCache: CompensationDataCache = {};
+let companyIdCache: CompanyIdCache = {};
 let activeItemElement: HTMLElement;
 let activeCompany: string;
 let activeCountry: LevelsCountryConfiguration =
@@ -139,8 +148,23 @@ const registerAfterInitialPageLoad = () => {
 
 // <---- Levels FYI Helper ---->
 
-const getCompanyData = async (company: string): Promise<Company> => {
-  return await getCompanyInformationFromLevels(company);
+const getCompanyData = async (companyName: string): Promise<Company> => {
+  let company: Company;
+  let companyId = companyName;
+
+  const companyIdCacheItem = await getElementFromCompanyIdCache(companyName);
+  if (companyIdCacheItem?.companyId) {
+    companyId = companyIdCacheItem.companyId;
+  }
+  try {
+    company = await getCompanyInformationFromLevels(companyId);
+    setElementInCompanyIdCache(companyName, companyId, true);
+  } catch (err) {
+    setElementInCompanyIdCache(companyName, companyId, false);
+    throw err;
+  }
+
+  return company;
 };
 
 const getCompensationDataForCompany = async (
@@ -161,7 +185,7 @@ const getCompensationDataForCompany = async (
 const getCompensationAndLevelDataFromCache = async (
   company: Company
 ): Promise<CompensationAndLevel[]> => {
-  const compensationData = await getElementFromCache(
+  const compensationData = await getElementFromCompensationDataCache(
     company.companySlug,
     activeCountry.countryShortName
   );
@@ -174,7 +198,7 @@ const getCompensationAndLevelDataFromCache = async (
 const getCompensationAndLevelData = async (
   company: Company
 ): Promise<CompensationAndLevel[]> => {
-  let compensationData = await getElementFromCache(
+  let compensationData = await getElementFromCompensationDataCache(
     company.companySlug,
     activeCountry.countryShortName
   );
@@ -185,7 +209,7 @@ const getCompensationAndLevelData = async (
   );
   const result = await Promise.all(compensationPromises);
   compensationData = result.filter((result) => result != null);
-  setElementInCache(
+  setElementInCompensationDataCache(
     company.companySlug,
     activeCountry.countryShortName,
     compensationData
@@ -238,12 +262,12 @@ const getCompensationDataUrls = (company: Company): string[] => {
 };
 
 const getCompanyInformationFromLevels = async (
-  company: string
+  companyId: string
 ): Promise<Company> => {
-  const companyPageUrl = buildLevelsCompanyPageUrl(company);
+  const companyPageUrl = buildLevelsCompanyPageUrl(companyId);
   const response = await fetchResource(companyPageUrl);
   if (!response.ok) {
-    throw new Error(`Error fetching data for company [${company}]`);
+    throw new Error(`Error fetching data for company [${companyId}]`);
   }
   const responseText = await response.text();
   const responseData = extractResponseDataFromHTML(
@@ -251,7 +275,7 @@ const getCompanyInformationFromLevels = async (
     CONFIG.URLS.LEVELS_FYI.DATA_SCRIPT_TAG
   );
   if (!responseData.success) {
-    throw new Error(`Error parsing response data for company [${company}]`);
+    throw new Error(`Error parsing response data for company [${companyId}]`);
   }
   const responseJson = JSON.parse(responseData.content!);
   return {
@@ -620,7 +644,10 @@ const onCurrencySelectChange = (event: Event) => {
 // <----- Dropdown List OnChange ----->
 
 // <----- Cache Helper ----->
-const getElementFromCache = async (company: string, country: string) => {
+const getElementFromCompensationDataCache = async (
+  company: string,
+  country: string
+) => {
   if (Object.keys(compensationDataCache).length === 0) {
     const localStorageGetResult = await chrome.storage.local.get(
       CONFIG.STORAGE_KEYS.COMPENSATION_CACHE
@@ -634,7 +661,7 @@ const getElementFromCache = async (company: string, country: string) => {
   return compensationDataCache[company]?.[country] ?? null;
 };
 
-const setElementInCache = (
+const setElementInCompensationDataCache = (
   company: string,
   country: string,
   compensationData: CompensationAndLevel[]
@@ -647,6 +674,44 @@ const setElementInCache = (
     [CONFIG.STORAGE_KEYS.COMPENSATION_CACHE]: compensationDataCache,
   });
 };
+
+const getElementFromCompanyIdCache = async (companyName: string) => {
+  if (Object.keys(companyIdCache).length === 0) {
+    const localStorageGetResult = await chrome.storage.local.get(
+      CONFIG.STORAGE_KEYS.COMPANY_ID_CACHE
+    );
+
+    if (localStorageGetResult[CONFIG.STORAGE_KEYS.COMPANY_ID_CACHE]) {
+      companyIdCache =
+        localStorageGetResult[CONFIG.STORAGE_KEYS.COMPANY_ID_CACHE];
+    }
+  }
+  return companyIdCache[companyName] ?? null;
+};
+
+const setElementInCompanyIdCache = (
+  companyName: string,
+  companyId: string,
+  lastFetchSuccess: boolean
+) => {
+  const currentCompanyIdCacheItem = companyIdCache[companyName];
+  const newCompanyIdCacheItem = {
+    companyName,
+    companyId,
+    lastFetchSuccess,
+  };
+  if (
+    !currentCompanyIdCacheItem ||
+    JSON.stringify(newCompanyIdCacheItem) !==
+      JSON.stringify(currentCompanyIdCacheItem)
+  ) {
+    companyIdCache[companyName] = { companyId, lastFetchSuccess };
+    chrome.storage.local.set({
+      [CONFIG.STORAGE_KEYS.COMPANY_ID_CACHE]: companyIdCache,
+    });
+  }
+};
+
 // <----- Cache Helper ----->
 
 // <----- Currency Conversion Helper ----->
