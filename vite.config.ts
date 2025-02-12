@@ -11,10 +11,10 @@ export default defineConfig({
       targets: [
         { src: "src/chrome-extension/manifest.json", dest: "." },
         { src: "src/chrome-extension/public/linkedin_styling.css", dest: "." },
-        { src: "src/chrome-extension/public/16.png", dest: "./public" },
-        { src: "src/chrome-extension/public/32.png", dest: "./public" },
-        { src: "src/chrome-extension/public/48.png", dest: "./public" },
-        { src: "src/chrome-extension/public/192.png", dest: "./public" },
+        { src: "src/chrome-extension/public/16.png", dest: "." },
+        { src: "src/chrome-extension/public/32.png", dest: "." },
+        { src: "src/chrome-extension/public/48.png", dest: "." },
+        { src: "src/chrome-extension/public/128.png", dest: "." },
       ],
     }),
   ],
@@ -26,8 +26,14 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, "popup.html"),
         options: resolve(__dirname, "options.html"),
-        service_worker: resolve(__dirname, "src/chrome-extension/scripts/service_worker.ts"),
-        linkedin_script: resolve(__dirname, "src/chrome-extension/scripts/linkedin_script.ts"),
+        service_worker: resolve(
+          __dirname,
+          "src/chrome-extension/scripts/service_worker.ts"
+        ),
+        linkedin_script: resolve(
+          __dirname,
+          "src/chrome-extension/scripts/linkedin_script.ts"
+        ),
       },
       output: {
         entryFileNames: "[name].js",
